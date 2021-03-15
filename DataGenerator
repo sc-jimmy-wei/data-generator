@@ -1,0 +1,267 @@
+package DataGenerator;
+
+import java.io.BufferedReader;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import com.google.gson.*;
+import org.joda.time.*;
+import utility.GenerateRandomString;
+import utility.ReadExcelSpreadsheet;
+
+/**
+ * Created by jwei.
+ */
+ 
+public class AddTestData {
+
+    static GenerateRandomString generateRandomString = new GenerateRandomString();
+    static ReadExcelSpreadsheet accessExcelPOI = new ReadExcelSpreadsheet();
+
+    private static final String testData = "{path to data.xlsx";
+    private static String email = "{test account username}";
+    private static String password = "{test account password}";
+    private static String serverUrl = "{server url}";
+
+    public static void main(String[] args) {
+
+        System.out.println("Username: "  + email);
+        System.out.println("Password: "  + password);
+        System.out.println("Serverurl: "  + serverUrl);
+
+        createNewUser(email, password);
+        String sessionCookie = getCookies(email, password);
+
+        String newMeterGuid = insertMeter(sessionCookie);
+        insertReadingData(sessionCookie, newMeterGuid);
+
+//        returnUserSyncInfo();
+    }
+
+    public static void createNewUser(String email, String password){
+        try{
+            String url = serverUrl + "endpoint";
+            String body = "{json}";
+
+            URL object = new URL(url);
+            HttpURLConnection con = (HttpURLConnection) object.openConnection();
+            con.setRequestMethod("POST");
+            con.setRequestProperty("Content-Type", "application/json");
+            con.setDoOutput(true);
+            con.setDoInput(true);
+            DataOutputStream wr = new DataOutputStream(con.getOutputStream());
+            wr.writeBytes(body);
+            wr.flush();
+            wr.close();
+
+            int responseCode = con.getResponseCode();
+            System.out.println("Sending 'POST' create user request to URL : " + url);
+            System.out.println("Post parameters : " + body);
+            System.out.println("Response Code : " + responseCode);
+
+
+        } catch (MalformedURLException e) {
+            System.err.println("MalformedURLException: " + e.getMessage());
+        } catch (IOException e) {
+            System.err.println("IOException: " + e.getMessage());
+        }
+
+    }
+
+    public static String getCookies(String username, String password) {
+        String cookie = "";
+        try {
+            String url = serverUrl + "endpoint";
+            String body = "{json}";
+
+            URL object = new URL(url);
+            HttpURLConnection con = (HttpURLConnection) object.openConnection();
+            con.setRequestMethod("POST");
+            con.setRequestProperty("Content-Type", "application/json");
+            con.setDoOutput(true);
+            con.setDoInput(true);
+            DataOutputStream wr = new DataOutputStream(con.getOutputStream());
+            wr.writeBytes(body);
+            wr.flush();
+            wr.close();
+
+            //parse and store json response into String
+            String json_response = "";
+            InputStreamReader in = new InputStreamReader(con.getInputStream());
+            BufferedReader br = new BufferedReader(in);
+            String text = "";
+            while ((text = br.readLine()) != null) {
+                json_response += text;
+            }
+
+            //Parse json response string to get user guid
+            JsonElement parser = new JsonParser().parse(json_response);
+            String user_guid = parser.getAsJsonObject().get("guid").getAsString();
+            System.out.println(user_guid);
+
+            int responseCode = con.getResponseCode();
+            System.out.println("Sending 'POST' get cookie request to URL : " + url);
+            System.out.println("Post parameters : " + body);
+            System.out.println("Response Code : " + responseCode);
+
+            Map<String, List<String>> map = con.getHeaderFields();
+            System.out.println(map);
+//            System.out.println("Response Headers:");
+//            for (Map.Entry<String, List<String>> entry : map.entrySet()) {
+//                System.out.println("Key : " + entry.getKey()
+//                        + " ,Value : " + entry.getValue());
+//            }
+
+            List<String> value = map.get("Set-Cookie");
+            cookie = value.toString().replace("["," ").replace("]"," ");
+//            System.out.println(cookie);
+
+        } catch (MalformedURLException e) {
+            System.err.println("MalformedURLException: " + e.getMessage());
+        } catch (IOException e){
+            System.err.println("IOException: " + e.getMessage());
+        }
+
+        System.out.println(cookie.trim());
+        return cookie.trim();
+    }
+
+    public static String insertMeter(String cookie){
+
+        String meterGuid = generateRandomString.generateUuidString();
+        String currentTime = Instant.now().toString();
+        System.out.println(currentTime);
+        try {
+            String url = serverUrl + "endpoint";
+            String body = "{json";
+
+            URL object = new URL(url);
+            HttpURLConnection con = (HttpURLConnection) object.openConnection();
+            con.setRequestMethod("PUT");
+            con.setRequestProperty("Cookie", cookie);
+            con.setRequestProperty("Content-Type", "application/json");
+            con.setDoOutput(true);
+            con.setDoInput(true);
+            DataOutputStream wr = new DataOutputStream(con.getOutputStream());
+            wr.writeBytes(body);
+            wr.flush();
+            wr.close();
+
+            int responseCode = con.getResponseCode();
+            System.out.println("Sending 'POST' add meter request to URL : " + url);
+            System.out.println("Post parameters : " + body);
+            System.out.println("Response Code : " + responseCode);
+
+
+        } catch (MalformedURLException e) {
+            System.err.println("MalformedURLException: " + e.getMessage());
+        } catch (IOException e){
+            System.err.println("IOException: " + e.getMessage());
+        }
+        return meterGuid;
+    }
+
+
+    public static void insertReadingData(String cookie, String meterGuid){
+        try {
+            String url = serverUrl + "endpoint";
+            String field[][] = accessExcelPOI.readExcelPOI(testData, {sheetNumber});
+            HashMap<String, JsonArray> combinedMap = new HashMap<>();
+
+            // create the reading object
+            JsonObject reading = new JsonObject();
+            // create a json array called readings
+            JsonArray readings = new JsonArray();
+
+            // create json content for reading
+            for (int i = 1; i < field.length; i++) {
+                if (field[i][1] == null) {
+                    break;
+                }
+                JsonObject dataset = new JsonObject();
+                dataset.addProperty("field1", field[i][1]);
+                dataset.addProperty("meterGuid", meterGuid);
+                readings.add(dataset);
+
+                String syncTime = dataset.get("syncTimestamp").getAsString();
+                //System.out.println(syncTime);
+                JsonArray array = combinedMap.get(syncTime);
+                if (array == null) {
+                    array = new JsonArray();
+                }
+                array.add(dataset);
+                combinedMap.put(syncTime, array);
+            }
+
+            //loop through readings json array and insert readings
+            for (JsonArray value : combinedMap.values()) {
+                reading.add("readings", value);
+                Gson gson = new GsonBuilder().serializeNulls().create();
+
+                URL object = new URL(url);
+                HttpURLConnection con = (HttpURLConnection) object.openConnection();
+                con.setRequestMethod("PUT");
+                con.setRequestProperty("Cookie", cookie);
+                con.setRequestProperty("Content-Type", "application/json");
+                con.setDoOutput(true);
+                con.setDoInput(true);
+                DataOutputStream wr = new DataOutputStream(con.getOutputStream());
+                wr.writeBytes(gson.toJson(reading));
+                wr.flush();
+                wr.close();
+
+                int responseCode = con.getResponseCode();
+                System.out.println("Sending 'PUT' insert readings data request to URL : " + url);
+                System.out.println("Put parameters : " + gson.toJson(reading));
+                System.out.println("Response Code : " + responseCode);
+            }
+
+            //loop through readings json array and insert sync events
+            for (String key : combinedMap.keySet()){
+                insertSyncEvent(meterGuid, key, cookie);
+            }
+
+        } catch (MalformedURLException e) {
+            System.err.println("MalformedURLException: " + e.getMessage());
+        } catch (IOException e){
+            System.err.println("IOException: " + e.getMessage());
+        }
+    }
+
+    public static void insertSyncEvent(String meterGuid, String syncTimestamp, String cookie){
+        try {
+            String url = serverUrl + "endpoint";
+            String body = "{json};
+
+            URL object = new URL(url);
+            HttpURLConnection con = (HttpURLConnection) object.openConnection();
+            con.setRequestMethod("POST");
+            con.setRequestProperty("Cookie", cookie);
+            con.setRequestProperty("Content-Type", "application/json");
+            con.setDoOutput(true);
+            con.setDoInput(true);
+            DataOutputStream wr = new DataOutputStream(con.getOutputStream());
+            wr.writeBytes(body);
+            wr.flush();
+            wr.close();
+
+            int responseCode = con.getResponseCode();
+            System.out.println("Sending 'POST' insert sync event request to URL : " + url);
+            System.out.println("Post parameters : " + body);
+            System.out.println("Response Code : " + responseCode);
+
+        } catch (MalformedURLException e) {
+            System.err.println("MalformedURLException: " + e.getMessage());
+        } catch (IOException e){
+            System.err.println("IOException: " + e.getMessage());
+        }
+
+    }
+}
